@@ -27,6 +27,8 @@ namespace VcvPluginDownload
     {
         public string name { get; set; }
         public string author { get; set; }
+        public string homepage { get; set; }
+        public string source { get; set; }
         public VcvPackageJsonDownload downloads { get; set; }
     }
 
@@ -64,14 +66,40 @@ namespace VcvPluginDownload
                 throw;
             }
 
+            bool newPackageSeen = false;
             foreach (var jsonFile in jsonFiles)
             {
+                if (jsonFile == "Fundamental.json" ||
+                    jsonFile == "VCV-Console.json" ||
+                    jsonFile == "VCV-PulseMatrix.json" || 
+                    jsonFile == "UnfilteredVolume1.json"
+                    )
+                {
+                    // Skip these 
+                    try
+                    {
+                        string localJsonFile = $"{jsonDestPath}\\{jsonFile}";
+                        File.Delete(localJsonFile);
+                    }
+                    catch (Exception )
+                    {
+                    }
+                    continue;
+                }
+
+                bool localJsonFilePreviouslySeen = false;
                 try
                 {
                     string localJsonFile = $"{jsonDestPath}\\{jsonFile}";
 
-                    try
+                    if (System.IO.File.Exists(localJsonFile))
                     {
+                        localJsonFilePreviouslySeen = true;
+                    }
+
+
+                    try
+                        {
                         DownloadFile($"https://raw.githubusercontent.com/VCVRack/community/master/plugins/{jsonFile}", localJsonFile);
                     }
                     catch (Exception e)
@@ -94,20 +122,51 @@ namespace VcvPluginDownload
                             {
                                 Console.WriteLine($"Downloading {zipFile}");
                                 DownloadFile(jsonPackage.downloads.win.download, zipFile);
+                                newPackageSeen = true;
                             }
 
                         }
+                        File.Delete(localJsonFile);
                     }
                     catch (Exception)
                     {
-                        Console.WriteLine($"Couldn't download package from {jsonFile}");
+                        if (!localJsonFilePreviouslySeen)
+                        {
+                            string homePage = GetHomePage(localJsonFile);
+                            Console.WriteLine($"Couldn't download package from {jsonFile}. {homePage}");
+                            newPackageSeen = true;
+                        }
                     }
-
-                    File.Delete(localJsonFile);
                 }
                 catch (Exception)
                 {
                 }
+            }
+
+            if (!newPackageSeen)
+            {
+                Console.WriteLine($"No new or updated packages detected");
+            }
+        }
+
+        static string GetHomePage(string localJsonFile)
+        {
+            try
+            {
+                using (StreamReader file = File.OpenText(localJsonFile))
+                {
+                    JsonSerializer serializer = new JsonSerializer();
+                    VcvPackageJson jsonPackage = (VcvPackageJson)serializer.Deserialize(file, typeof(VcvPackageJson));
+                    if (string.IsNullOrEmpty(jsonPackage.homepage))
+                    {
+                        return jsonPackage.source;
+                    }
+                    return jsonPackage.homepage;
+                }
+            }
+            catch (Exception)
+            {
+                return "";
             }
         }
 
